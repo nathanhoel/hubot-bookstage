@@ -12,6 +12,6 @@ First run `npm install hubot-bookstage --save`, then add `hubot-bookstage` to th
 
 - `bookstage list`: list all staging servers and their availability
 - `bookstage who [env]`: show who has booked the staging server and how much time they have left
-- `bookstage book [env] [minutes]`: book the staging server and optionally specify usage time. Default is 30min
+- `bookstage book [env] [hours]`: book the staging server and optionally specify usage time. Default is 1 hour.
 - `bookstage cancel [env]`: cancel the current booking
 - `bookstage add [env]`: add a new staging to the list of available staging servers
