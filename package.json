@@ -1,0 +1,25 @@
+{
+  "name": "hubot-bookstage",
+  "description": "Bookstage manages who is currently using your team's staging server.",
+  "version": "0.1.0",
+  "main": "./src/bookstage",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nathanhoel/hubot-bookstage.git"
+  },
+  "keywords": [
+    "hubot",
+    "staging",
+    "server",
+    "book",
+    "checkout",
+    "ops",
+    "developer"
+  ],
+  "author": "Nathan Hoel",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/nathanhoel/hubot-bookstage/issues"
+  },
+  "homepage": "https://github.com/nathanhoel/hubot-bookstage"
+}
