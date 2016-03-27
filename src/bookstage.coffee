@@ -34,14 +34,17 @@ class Message
       return Number(@hours)
 
 bookEnv = (data, user, hours) ->
-  return false if data.user != user && new Date() < data.expires
-  unless data.user == user && new Date() < data.expires
+  fixExpires(data)
+  if data.user != user && new Date() < data.expires
+    return false
+  else
     data.user = user
     data.expires = new Date()
   data.expires = new Date(data.expires.getTime() + hours * 1000 * 60 * 60)
 
 status = (env, data) ->
-  return "#{env} is free for use." if new Date() >= data.expires
+  fixExpires(data)
+  return "#{env} is free for use." if data.expires < new Date()
 
   minutes = Math.ceil((data.expires - new Date())/(60*1000))
   time = "#{minutes} minutes"
@@ -52,6 +55,9 @@ status = (env, data) ->
 
 cancelBooking = (data) ->
   data.expires = new Date(0)
+
+fixExpires = (data) ->
+  data.expires = new Date(data.expires) if typeof data.expires is 'string'
 
 module.exports = (robot) ->
   robot.brain.on 'loaded', =>
