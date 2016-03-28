@@ -8,11 +8,11 @@
 #   None
 #
 # Commands:
-#   bookstage list - List all staging servers and their availability
-#   bookstage who [env] - Show who has booked the staging server and how much time they have left
-#   bookstage book [env] [hours] - Book the staging server and optionally specify usage time. Default is 1 hour.
-#   bookstage cancel [env] - Cancel the current booking
-#   bookstage add [env] - Add a new staging to the list of available staging servers
+#   hubot bookstage list - List all staging servers and their availability
+#   hubot bookstage who <env> - Show who has booked the staging server and how much time they have left
+#   hubot bookstage book <env> [hours] - Book the staging server and optionally specify usage time. Default is 1 hour.
+#   hubot bookstage cancel <env> - Cancel the current booking
+#   hubot bookstage add <env> - Add a new staging to the list of available staging servers
 #
 # Author:
 #   tinifni, nathanhoel
@@ -56,6 +56,7 @@ status = (env, data) ->
 cancelBooking = (data) ->
   data.expires = new Date(0)
 
+# This fixes an issue with some robot brains changing date objects to strings when persisting
 fixExpires = (data) ->
   data.expires = new Date(data.expires) if typeof data.expires is 'string'
 
