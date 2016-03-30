@@ -1,116 +1,126 @@
 # Description:
-#   Bookstage manages who is currently using your team's staging server
+#   Bookstage manages who is currently using your team's staging server.
+#   Hubot also notifies you 30 minutes before the end of a reservation.
 #
 # Dependencies:
 #   None
 #
 # Configuration:
-#   None
+#   HUBOT_BOOKSTAGE_MONOSPACE_WRAPPER - characters to wrap status in (placed before and after) to make it monospaced
 #
 # Commands:
-#   hubot bookstage list - List all staging servers and their availability
-#   hubot bookstage who <env> - Show who has booked the staging server and how much time they have left
-#   hubot bookstage book <env> [hours] - Book the staging server and optionally specify usage time. Default is 1 hour.
-#   hubot bookstage cancel <env> - Cancel the current booking
-#   hubot bookstage add <env> - Add a new staging to the list of available staging servers
+#   hubot bookstage add <env> - Add a new server. 'bs' is an alias for 'bookstage'.
+#   hubot bookstage book <env> [<hours> <description>] - Book a server. Default is 1 hour.
+#   hubot bookstage cancel <env> - Cancel a booking.
+#   hubot bookstage list - List status of all staging servers.
+#   hubot bookstage who <env> - Show status of a single server.
 #
 # Author:
 #   tinifni, nathanhoel
 
-HALF_HOUR_MS = 1800000
+pad = require('pad')
+
+MS_HALF_HOUR = 1800000
+MONOSPACE_WRAPPER = if process.env.HUBOT_BOOKSTAGE_MONOSPACE_WRAPPER then process.env.HUBOT_BOOKSTAGE_MONOSPACE_WRAPPER else ''
 
 class Message
-  constructor: (env, hours) ->
-    @env = env
-    @hours = hours
+  constructor: (res) ->
+    @env = res.match[2]
+    @hours = res.match[3]
+    @description = res.match[4]
   getEnv: ->
     if @env == undefined
       return 'staging'
     else
       return @env
 
-  gethours: ->
+  getHours: ->
     if @hours == undefined
       return 1
     else
       return Number(@hours)
 
-bookEnv = (env, data, res, hours) ->
-  fixExpires(data)
-  ms = hours * 1000 * 60 * 60
-  if data.user != res.message.user.name && new Date() < data.expires
+  getDesc: ->
+    if @description == undefined
+      return ''
+    else
+      return @description
+
+bookEnv = (message, data, res) ->
+  ms = message.getHours() * 1000 * 60 * 60
+  if data.user != res.message.user.name && Date.now() < data.expires
     return false
-  else
-    data.user = res.message.user.name
-    data.expires = new Date()
-    data.timeoutId = setTimeout () ->
-      res.reply "You have 30 minutes remaining on your reservation of *#{env}*"
-    , (ms - HALF_HOUR_MS)
-  data.expires = new Date(data.expires.getTime() + ms)
 
-status = (env, data) ->
-  fixExpires(data)
-  return "*#{env}* is free for use." if data.expires < new Date()
+  data.user = res.message.user.name
+  data.expires = Date.now() + ms
+  data.description = message.getDesc()
+  setTimeout () ->
+    res.reply "You have 30 minutes remaining on your reservation of *#{message.getEnv()}*"
+  , (ms - MS_HALF_HOUR)
 
-  minutes = Math.ceil((data.expires - new Date())/(60*1000))
+status = (env, data, outputAsMonospace) ->
+  return joinSections([env, '-'], outputAsMonospace) if data.expires <= Date.now()
+
+  minutes = Math.ceil((data.expires - Date.now())/(60*1000))
   time = "#{minutes} minutes"
   if minutes > 120
     hours = Math.ceil(minutes/60)
     time = "#{hours} hours"
-  return "#{data.user} has *#{env}* booked for the next #{time}."
+  return joinSections([env, data.user, time, data.description], outputAsMonospace)
+
+joinSections = (sections, outputAsMonospace=true) ->
+  padding = if MONOSPACE_WRAPPER.length > 0 then 15 else 0
+  for section, i in sections
+    sections[i] = '' if sections[i] == undefined
+    sections[i] = "#{pad(sections[i], padding)}"
+  text = sections.join(' | ')
+  text = monospaceWrap(text) if outputAsMonospace
+  return text
+
+monospaceWrap = (text) ->
+  return "#{MONOSPACE_WRAPPER}#{text}#{MONOSPACE_WRAPPER}"
 
 cancelBooking = (data) ->
-  data.expires = new Date(0)
-  if data.timeoutId
-    clearTimeout(data.timeoutId)
-
-# This fixes an issue with some robot brains changing date objects to strings when persisting
-fixExpires = (data) ->
-  data.expires = new Date(data.expires) if typeof data.expires is 'string'
+  data.expires = 0
 
 module.exports = (robot) ->
   robot.brain.on 'loaded', =>
     robot.brain.data.bookstage ||= {}
 
-  robot.respond /bookstage book\s?([A-Za-z]+)*\s?(\d+)*/i, (res) ->
-    message = new Message(res.match[1], res.match[2])
+  robot.respond /(bookstage|bs) book\s?([A-Za-z]+)*\s?(\d+)*\s?(.*)/i, (res) ->
+    message = new Message(res)
     env = message.getEnv()
-    hours = message.gethours()
-
-    bookEnv(env, robot.brain.data.bookstage[env], res, hours)
+    bookEnv(message, robot.brain.data.bookstage[env], res)
     res.send status(env, robot.brain.data.bookstage[env])
 
-  robot.respond /bookstage who\s?([A-Za-z]+)*/i, (res) ->
-    message = new Message(res.match[1])
+  robot.respond /(bookstage|bs) who\s?([A-Za-z]+)*/i, (res) ->
+    message = new Message(res)
     env = message.getEnv()
-
     res.send status(env, robot.brain.data.bookstage[env])
 
-  robot.respond /bookstage cancel\s?([A-Za-z]+)*/i, (res) ->
-    message = new Message(res.match[1])
+  robot.respond /(bookstage|bs) cancel\s?([A-Za-z]+)*/i, (res) ->
+    message = new Message(res)
     env = message.getEnv()
+    data = robot.brain.data.bookstage[env]
+    cancelBooking(data)
+    res.send status(env, data)
 
-    cancelBooking(robot.brain.data.bookstage[env])
+  robot.respond /(bookstage|bs) add\s?([A-Za-z]+)*/i, (res) ->
+    message = new Message(res)
+    env = message.getEnv()
+    robot.brain.data.bookstage[env] ||= { user: "initial", expires: Date.now(), description: "" }
     res.send status(env, robot.brain.data.bookstage[env])
 
-  robot.respond /bookstage add\s?([A-Za-z]+)*/i, (res) ->
-    message = new Message(res.match[1])
+  robot.respond /(bookstage|bs) remove\s?([A-Za-z]+)*/i, (res) ->
+    message = new Message(res)
     env = message.getEnv()
-
-    robot.brain.data.bookstage[env] ||= { user: "initial", expires: new Date(0) }
-    res.send status(env, robot.brain.data.bookstage[env])
-
-  robot.respond /bookstage remove\s?([A-Za-z]+)*/i, (res) ->
-    message = new Message(res.match[1])
-    env = message.getEnv()
-
     cancelBooking(robot.brain.data.bookstage[env])
     delete robot.brain.data.bookstage[env]
-    res.send "Deleted *#{env}*"
+    res.send "Deleted #{env}"
 
-  robot.respond /bookstage list/i, (res) ->
+  robot.respond /(bookstage|bs) list/i, (res) ->
     statusText = ""
     keys = Object.keys(robot.brain.data.bookstage).sort()
     for env in keys
-      statusText += "#{status(env, robot.brain.data.bookstage[env])}\n"
-    res.send statusText
+      statusText += "#{status(env, robot.brain.data.bookstage[env], false)}\n"
+    res.send monospaceWrap(statusText)
