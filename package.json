@@ -1,7 +1,7 @@
 {
   "name": "hubot-bookstage",
   "description": "Bookstage manages who is currently using your team's staging server.",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "main": "src/bookstage.coffee",
   "repository": {
     "type": "git",

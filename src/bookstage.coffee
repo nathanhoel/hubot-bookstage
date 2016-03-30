@@ -17,6 +17,8 @@
 # Author:
 #   tinifni, nathanhoel
 
+HALF_HOUR_MS = 1800000
+
 class Message
   constructor: (env, hours) ->
     @env = env
@@ -33,28 +35,34 @@ class Message
     else
       return Number(@hours)
 
-bookEnv = (data, user, hours) ->
+bookEnv = (env, data, res, hours) ->
   fixExpires(data)
-  if data.user != user && new Date() < data.expires
+  ms = hours * 1000 * 60 * 60
+  if data.user != res.message.user.name && new Date() < data.expires
     return false
   else
-    data.user = user
+    data.user = res.message.user.name
     data.expires = new Date()
-  data.expires = new Date(data.expires.getTime() + hours * 1000 * 60 * 60)
+    data.timeoutId = setTimeout () ->
+      res.reply "You have 30 minutes remaining on your reservation of *#{env}*"
+    , (ms - HALF_HOUR_MS)
+  data.expires = new Date(data.expires.getTime() + ms)
 
 status = (env, data) ->
   fixExpires(data)
-  return "#{env} is free for use." if data.expires < new Date()
+  return "*#{env}* is free for use." if data.expires < new Date()
 
   minutes = Math.ceil((data.expires - new Date())/(60*1000))
   time = "#{minutes} minutes"
   if minutes > 120
     hours = Math.ceil(minutes/60)
     time = "#{hours} hours"
-  return "#{data.user} has #{env} booked for the next #{time}."
+  return "#{data.user} has *#{env}* booked for the next #{time}."
 
 cancelBooking = (data) ->
   data.expires = new Date(0)
+  if data.timeoutId
+    clearTimeout(data.timeoutId)
 
 # This fixes an issue with some robot brains changing date objects to strings when persisting
 fixExpires = (data) ->
@@ -64,41 +72,45 @@ module.exports = (robot) ->
   robot.brain.on 'loaded', =>
     robot.brain.data.bookstage ||= {}
 
-  robot.respond /bookstage book\s?([A-Za-z]+)*\s?(\d+)*/i, (msg) ->
-    message = new Message(msg.match[1], msg.match[2])
+  robot.respond /bookstage book\s?([A-Za-z]+)*\s?(\d+)*/i, (res) ->
+    message = new Message(res.match[1], res.match[2])
     env = message.getEnv()
     hours = message.gethours()
 
-    bookEnv(robot.brain.data.bookstage[env], msg.message.user.name, hours)
-    msg.send status(env, robot.brain.data.bookstage[env])
+    bookEnv(env, robot.brain.data.bookstage[env], res, hours)
+    res.send status(env, robot.brain.data.bookstage[env])
 
-  robot.respond /bookstage who\s?([A-Za-z]+)*/i, (msg) ->
-    message = new Message(msg.match[1])
+  robot.respond /bookstage who\s?([A-Za-z]+)*/i, (res) ->
+    message = new Message(res.match[1])
     env = message.getEnv()
 
-    msg.send status(env, robot.brain.data.bookstage[env])
+    res.send status(env, robot.brain.data.bookstage[env])
 
-  robot.respond /bookstage cancel\s?([A-Za-z]+)*/i, (msg) ->
-    message = new Message(msg.match[1])
+  robot.respond /bookstage cancel\s?([A-Za-z]+)*/i, (res) ->
+    message = new Message(res.match[1])
     env = message.getEnv()
 
     cancelBooking(robot.brain.data.bookstage[env])
-    msg.send status(env, robot.brain.data.bookstage[env])
+    res.send status(env, robot.brain.data.bookstage[env])
 
-  robot.respond /bookstage add\s?([A-Za-z]+)*/i, (msg) ->
-    message = new Message(msg.match[1])
+  robot.respond /bookstage add\s?([A-Za-z]+)*/i, (res) ->
+    message = new Message(res.match[1])
     env = message.getEnv()
 
     robot.brain.data.bookstage[env] ||= { user: "initial", expires: new Date(0) }
-    msg.send status(env, robot.brain.data.bookstage[env])
+    res.send status(env, robot.brain.data.bookstage[env])
 
-  robot.respond /bookstage remove\s?([A-Za-z]+)*/i, (msg) ->
-    message = new Message(msg.match[1])
+  robot.respond /bookstage remove\s?([A-Za-z]+)*/i, (res) ->
+    message = new Message(res.match[1])
     env = message.getEnv()
 
-    robot.brain.data.bookstage[env].del
-    msg.send "Deleted #{env}"
+    cancelBooking(robot.brain.data.bookstage[env])
+    delete robot.brain.data.bookstage[env]
+    res.send "Deleted *#{env}*"
 
-  robot.respond /bookstage list/i, (msg) ->
-    for env, value of robot.brain.data.bookstage
-      msg.send status(env, value)
+  robot.respond /bookstage list/i, (res) ->
+    statusText = ""
+    keys = Object.keys(robot.brain.data.bookstage).sort()
+    for env in keys
+      statusText += "#{status(env, robot.brain.data.bookstage[env])}\n"
+    res.send statusText
