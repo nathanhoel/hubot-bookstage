@@ -3,7 +3,7 @@
 #   Hubot also notifies you 30 minutes before the end of a reservation.
 #
 # Dependencies:
-#   None
+#   pad
 #
 # Configuration:
 #   HUBOT_BOOKSTAGE_MONOSPACE_WRAPPER - characters to wrap status in (placed before and after) to make it monospaced
