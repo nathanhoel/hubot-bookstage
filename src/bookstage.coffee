@@ -9,8 +9,8 @@
 #   HUBOT_BOOKSTAGE_MONOSPACE_WRAPPER - characters to wrap status in (placed before and after) to make it monospaced
 #
 # Commands:
-#   hubot bookstage add <env> - Add a new server. 'bs' is an alias for 'bookstage'.
-#   hubot bookstage book <env> [<hours> <description>] - Book a server. Default is 1 hour.
+#   hubot bookstage add <env> [category] - Add a new server. 'bs' is an alias for 'bookstage'.
+#   hubot bookstage book <env> [<hours> <reason>] - Book a server. Default is 1 hour.
 #   hubot bookstage cancel <env> - Cancel a booking.
 #   hubot bookstage list - List status of all staging servers.
 #   hubot bookstage who <env> - Show status of a single server.
@@ -26,8 +26,8 @@ MONOSPACE_WRAPPER = if process.env.HUBOT_BOOKSTAGE_MONOSPACE_WRAPPER then proces
 class Message
   constructor: (res) ->
     @env = res.match[2]
-    @hours = res.match[3]
-    @description = res.match[4]
+    @hours = @category = res.match[3]
+    @reason = res.match[4]
   getEnv: ->
     if @env == undefined
       return 'staging'
@@ -40,11 +40,17 @@ class Message
     else
       return Number(@hours)
 
-  getDesc: ->
-    if @description == undefined
+  getReason: ->
+    if @reason == undefined
       return ''
     else
-      return @description
+      return @reason
+
+  getCategory: ->
+    if @category == undefined
+      return ''
+    else
+      return @category
 
 bookEnv = (message, data, res) ->
   ms = message.getHours() * 1000 * 60 * 60
@@ -53,28 +59,33 @@ bookEnv = (message, data, res) ->
 
   data.user = res.message.user.name
   data.expires = Date.now() + ms
-  data.description = message.getDesc()
+  data.reason = message.getReason()
   setTimeout () ->
     res.reply "You have 30 minutes remaining on your reservation of *#{message.getEnv()}*"
   , (ms - MS_HALF_HOUR)
 
-status = (env, data, outputAsMonospace) ->
-  return joinSections([env, '-'], outputAsMonospace) if data.expires <= Date.now()
+status = (env, data) ->
+  return monospaceWrap("#{statusHeaders()}\n#{statusRow(env, data)}")
+
+statusRow = (env, data) ->
+  return joinSections([env, data.category, '-', '-', '']) if data.expires <= Date.now()
 
   minutes = Math.ceil((data.expires - Date.now())/(60*1000))
   time = "#{minutes} minutes"
   if minutes > 120
     hours = Math.ceil(minutes/60)
     time = "#{hours} hours"
-  return joinSections([env, data.user, time, data.description], outputAsMonospace)
+  return joinSections([env, data.category, data.user, time, data.reason])
 
-joinSections = (sections, outputAsMonospace=true) ->
+statusHeaders = () ->
+  return joinSections(['*Name*', '*Category*', '*Booked By*', '*Remaining*', '*Reason*'])
+
+joinSections = (sections) ->
   padding = if MONOSPACE_WRAPPER.length > 0 then 15 else 0
   for section, i in sections
     sections[i] = '' if sections[i] == undefined
     sections[i] = "#{pad(sections[i], padding)}"
   text = sections.join(' | ')
-  text = monospaceWrap(text) if outputAsMonospace
   return text
 
 monospaceWrap = (text) ->
@@ -87,31 +98,31 @@ module.exports = (robot) ->
   robot.brain.on 'loaded', =>
     robot.brain.data.bookstage ||= {}
 
-  robot.respond /(bookstage|bs) book\s?([A-Za-z]+)*\s?(\d+)*\s?(.*)/i, (res) ->
+  robot.respond /(bookstage|bs) book\s?([0-9A-Za-z-]+)*\s?(\d+)*\s?(.*)/i, (res) ->
     message = new Message(res)
     env = message.getEnv()
     bookEnv(message, robot.brain.data.bookstage[env], res)
     res.send status(env, robot.brain.data.bookstage[env])
 
-  robot.respond /(bookstage|bs) who\s?([A-Za-z]+)*/i, (res) ->
+  robot.respond /(bookstage|bs) who\s?([0-9A-Za-z-]+)*/i, (res) ->
     message = new Message(res)
     env = message.getEnv()
     res.send status(env, robot.brain.data.bookstage[env])
 
-  robot.respond /(bookstage|bs) cancel\s?([A-Za-z]+)*/i, (res) ->
+  robot.respond /(bookstage|bs) cancel\s?([0-9A-Za-z-]+)*/i, (res) ->
     message = new Message(res)
     env = message.getEnv()
     data = robot.brain.data.bookstage[env]
     cancelBooking(data)
     res.send status(env, data)
 
-  robot.respond /(bookstage|bs) add\s?([A-Za-z]+)*/i, (res) ->
+  robot.respond /(bookstage|bs) add\s?([0-9A-Za-z-]+)*\s?(.*)/i, (res) ->
     message = new Message(res)
     env = message.getEnv()
-    robot.brain.data.bookstage[env] ||= { user: "initial", expires: Date.now(), description: "" }
+    robot.brain.data.bookstage[env] ||= { name: env, category: message.getCategory(), user: "initial", expires: Date.now(), reason: "" }
     res.send status(env, robot.brain.data.bookstage[env])
 
-  robot.respond /(bookstage|bs) remove\s?([A-Za-z]+)*/i, (res) ->
+  robot.respond /(bookstage|bs) remove\s?([0-9A-Za-z-]+)*/i, (res) ->
     message = new Message(res)
     env = message.getEnv()
     cancelBooking(robot.brain.data.bookstage[env])
@@ -119,8 +130,14 @@ module.exports = (robot) ->
     res.send "Deleted #{env}"
 
   robot.respond /(bookstage|bs) list/i, (res) ->
-    statusText = ""
-    keys = Object.keys(robot.brain.data.bookstage).sort()
-    for env in keys
-      statusText += "#{status(env, robot.brain.data.bookstage[env], false)}\n"
+    statusText = "#{statusHeaders()}\n"
+    servers = []
+    servers.push(val) for key, val of robot.brain.data.bookstage
+    servers = servers.sort (a, b) ->
+      return -1 if a.category.toLowerCase() < b.category.toLowerCase() || (a.category.toLowerCase() == b.category.toLowerCase() && a.name.toLowerCase() < b.name.toLowerCase())
+      return 1 if b.category.toLowerCase() < a.category.toLowerCase() || (b.category.toLowerCase() == a.category.toLowerCase() && b.name.toLowerCase() < a.name.toLowerCase())
+      return 0
+
+    for server in servers
+      statusText += "#{statusRow(server.name, server)}\n"
     res.send monospaceWrap(statusText)
