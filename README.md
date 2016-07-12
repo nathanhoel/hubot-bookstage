@@ -10,8 +10,12 @@ First run `npm install hubot-bookstage --save`, then add `hubot-bookstage` to th
 
 ## Usage
 
-- `hubot bookstage add [env]`: add a new staging to the list of available staging servers
-- `hubot bookstage book [env] [hours]`: book the staging server and optionally specify usage time. Default is 1 hour.
-- `hubot bookstage cancel [env]`: cancel the current booking
-- `hubot bookstage list`: list all staging servers and their availability
-- `hubot bookstage who [env]`: show who has booked the staging server and how much time they have left
+- `hubot bookstage add <env> [category]`: Add a new server. 'bs' is an alias for 'bookstage'.
+- `hubot bookstage book <env> [<hours> <reason>]`: Book a server. Default is 1 hour.
+- `hubot bookstage cancel <env>`: Cancel a booking.
+- `hubot bookstage list`: List status of all staging servers.
+- `hubot bookstage who <env>`: Show status of a single server.
+
+## Configuration
+
+If you would like the status to be monospace, set `HUBOT_BOOKSTAGE_MONOSPACE_WRAPPER` env variable to a string that will be used to wrap the status. For instance, slack would be `HUBOT_BOOKSTAGE_MONOSPACE_WRAPPER='\`\`\`'`
