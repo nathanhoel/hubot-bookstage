@@ -18,4 +18,4 @@ First run `npm install hubot-bookstage --save`, then add `hubot-bookstage` to th
 
 ## Configuration
 
-If you would like the status to be monospace, set `HUBOT_BOOKSTAGE_MONOSPACE_WRAPPER` env variable to a string that will be used to wrap the status. For instance, slack would be `HUBOT_BOOKSTAGE_MONOSPACE_WRAPPER='\`\`\`'`
+If you would like the status to be monospace, set `HUBOT_BOOKSTAGE_MONOSPACE_WRAPPER` env variable to a string that will be used to wrap the status. For instance, slack would be ````HUBOT_BOOKSTAGE_MONOSPACE_WRAPPER='```'````
